@@ -1,327 +1,1 @@
-#!/bin/bash
-''':'
-command -v python  >/dev/null 2>&1 && exec python  "$0" "$@"
-command -v python3 >/dev/null 2>&1 && exec python3 "$0" "$@"
-command -v python2 >/dev/null 2>&1 && exec python2 "$0" "$@"
->&2 echo "error: cannot find python"
-exit 1
-'''
-
-# See https://gist.github.com/zsimic/c39dd9686c6d6b0d149a67ff23286b99 for docs on how to use
-
-import argparse
-import json
-import os
-import re
-import subprocess
-import sys
-import urllib
-from collections import defaultdict
-
-try:
-    from urllib.request import urlopen, Request  # python3
-
-except ImportError:
-    from urllib2 import urlopen, Request  # noqa, python2
-
-
-LOGFILE = os.environ.get("LINODE_DDNS_LOGFILE", "/var/log/messages")
-CFG_FOLDER = os.environ.get("LINODE_DDNS_CFG", "~/.ssh")
-COMMIT = False
-
-
-def log(message):
-    if COMMIT and os.path.exists(LOGFILE):
-        try:
-            with open(LOGFILE, "a") as fh:
-                fh.write(message)
-                if not message.endswith("\n"):
-                    fh.write("\n")
-
-                return
-
-        except Exception:
-            pass
-
-    print(message)
-
-
-def abort(message):
-    log(message)
-    sys.exit(1)
-
-
-def get_current_ip():
-    output = None
-    try:
-        p = subprocess.Popen(["/bin/ip", "-4", "route"], stdout=subprocess.PIPE, stderr=subprocess.PIPE)
-        output, _ = p.communicate()
-        if isinstance(output, bytes):
-            output = output.decode("utf-8")
-
-    except Exception as e:
-        abort("Can't run /bin/ip: %s" % e)
-
-    if output:
-        default = None
-        ips = {}
-        for line in output.splitlines():
-            m = re.search(r" dev (\S+)", line)
-            if m:
-                name = m.group(1)
-                if line.startswith("default"):
-                    default = name
-
-                else:
-                    m = re.search(r" src (\S+)", line)
-                    if m:
-                        ips[name] = m.group(1)
-
-        return ips.get(default)
-
-
-class LinodeDDns(object):
-    def __init__(self):
-        self.cfg_folder = os.path.expanduser(CFG_FOLDER)
-        self.cfg_file = os.path.join(self.cfg_folder, "linode-ddns.json")
-        self.last_ip_file = os.path.join(self.cfg_folder, ".last-ip")
-        self.url = "https://api.linode.com/v4"
-        self._current_ip = None
-        self._last_ip = None
-        self._headers = None
-        self.commit = False
-        self.token = None
-        self.records = None
-        try:
-            with open(self.cfg_file) as fh:
-                data = json.load(fh)
-                self.commit = data.get("commit")
-                self.token = data.get("token")
-                self.records = data.get("records")
-
-        except Exception:
-            pass
-
-    @property
-    def headers(self):
-        if self._headers is None:
-            self._headers = {"Content-type": "application/json", "Authorization": "Bearer %s" % self.token}
-
-        return self._headers
-
-    @property
-    def current_ip(self):
-        if self._current_ip is None:
-            self._current_ip = get_current_ip() or ""
-
-        return self._current_ip
-
-    @property
-    def last_ip(self):
-        if self._last_ip is None:
-            try:
-                with open(self.last_ip_file) as fh:
-                    line = fh.readline()
-                    self._last_ip = line.strip()
-
-            except Exception:
-                self._last_ip = ""
-
-        return self._last_ip
-
-    def as_json(self, commit=False):
-        result = dict(token=self.token, commit=bool(commit))
-        if self.records:
-            result["records"] = self.records
-
-        return "%s\n" % json.dumps(result, sort_keys=True, indent=2)
-
-    def save_json(self, commit=False):
-        if self.token:
-            with open(self.cfg_file, "w") as fh:
-                fh.write(self.as_json(commit=commit))
-
-    def get_url(self, entrypoint):
-        return "%s/%s" % (self.url, entrypoint.lstrip("/"))
-
-    def put(self, entrypoint, data):
-        url = self.get_url(entrypoint)
-        if COMMIT:
-            rest_request(url, data=data, headers=self.headers, method="PUT")
-
-    def get(self, entrypoint, **params):
-        url = self.get_url(entrypoint)
-        return rest_request(url, headers=self.headers, **params)
-
-    def get_paginated(self, entrypoint, **params):
-        url = self.get_url(entrypoint)
-        return get_paginated(url, headers=self.headers, **params)
-
-    def get_domains(self):
-        data = self.get_paginated("domains")
-        if not data:
-            print("No domains found")
-            sys.exit(1)
-
-        return [LinodeDomain(d) for d in data]
-
-
-class LinodeDomain(object):
-    def __init__(self, data):
-        self.id = data.get("id")
-        self.type = data.get("type")
-        self.domain = data.get("domain")
-        self.status = data.get("status")
-        self.record = None  # Associated record for matching name we're looking for, if any
-
-    def __eq__(self, other):
-        return self.domain == other.domain
-
-    def __lt__(self, other):
-        return self.domain < other.domain
-
-
-def rest_request(url, data=None, headers=None, method="GET", **params):
-    if params:
-        query_string = urllib.parse.urlencode(params)
-        url = url + "?" + query_string
-
-    request = Request(url, method=method, headers=headers)
-    if not hasattr(request, "get_method"):
-        request.get_method = lambda *_, **__: "PUT"
-
-    response = urlopen(request, data=data).read()
-    return json.loads(response)
-
-
-def get_paginated(url, headers=None, **params):
-    result = []
-    while True:
-        data = rest_request(url, headers=headers, method="GET", **params)
-        if not isinstance(data, dict) or "ERRORARRAY" in data:
-            raise Exception("Linode query failed: %s" % data)
-
-        result.extend(data.get("data", []))
-        page = data.get("page")
-        pages = data.get("pages")
-        if not page or not pages or page >= pages:
-            return result
-
-        params["page"] = page + 1
-
-
-def ask_user(message):
-    try:
-        compatible_input = raw_input
-
-    except NameError:
-        compatible_input = input
-
-    return compatible_input(message)
-
-
-def main():
-    """
-    Update linode dns
-    """
-    global COMMIT
-    parser = argparse.ArgumentParser(description=main.__doc__)
-    parser.add_argument("action", nargs="?", help="For troubleshooting.")
-    args = parser.parse_args()
-
-    try:
-        linode = LinodeDDns()
-        COMMIT = linode.commit
-        if not COMMIT and not linode.token:
-            token = ask_user("What is your linode token? (will be stored in %s):\n" % linode.cfg_file)
-            if token and len(token) == 64:
-                linode.token = token
-                linode.save_json()
-
-            else:
-                abort("Invalid token '%s', should be 64 characters long" % token)
-
-        if not linode.token:
-            abort("No token configured in '%s'" % linode.cfg_file)
-
-        if not args.action:
-            # No args: running on router
-            if not linode.records:
-                abort("Records not configured in %s" % linode.cfg_file)
-
-            if linode.current_ip == linode.last_ip:
-                sys.exit(0)
-
-            if not linode.current_ip:
-                abort("Could not determine current IP")
-
-            data = '{"target": "%s"}' % linode.current_ip
-            for record in linode.records.split():
-                linode.put("domains/%s" % record, data)
-
-            action = "updated" if COMMIT else "would be updated"
-            log("Home IP %s to %s" % (action, linode.current_ip))
-            sys.exit(0)
-
-        if args.action == "status":
-            print("Current IP: %s, Last IP: %s" % (linode.current_ip, linode.last_ip))
-            sys.exit(0)
-
-        if args.action == "domains":
-            # Show all domains in linode account
-            domains = linode.get_domains()
-            print("%10s %-9s %-8s %s" % ("ID", "Status", "Type", "Domain"))
-            for domain in sorted(domains):
-                print("%10s %-9s %-8s %s" % (domain.id, domain.status, domain.type, domain.domain))
-
-            sys.exit(0)
-
-        # Show all records matching given 'args.action' host name
-        do_commit = False
-        desired_hostname = args.action
-        if desired_hostname.startswith("commit:"):
-            do_commit = True
-            desired_hostname = desired_hostname.partition(":")[2]
-
-        domains = linode.get_domains()
-        records_by_domain = defaultdict(list)
-        all_records = []
-        for domain in sorted(domains):
-            for entry in linode.get_paginated("domains/%s/records" % domain.id):
-                name = entry.get("name")
-                if name != desired_hostname:
-                    continue
-
-                target = entry.get("target")
-                ep = "%s/records/%s" % (domain.id, entry.get("id"))
-                if target and ":" not in target:
-                    records_by_domain[domain.domain].append(ep)
-                    all_records.append(ep)
-
-        if not all_records:
-            print("No records matching '%s' found" % desired_hostname)
-            sys.exit(1)
-
-        linode.records = " ".join(all_records)
-        print("%s linode DNS records found with hostname '%s':\n" % (len(all_records), desired_hostname))
-        print("%-30s %s" % ("Entry point", "Domain"))
-        for domain in sorted(records_by_domain.keys()):
-            for ep in sorted(records_by_domain[domain]):
-                print("%-30s %s" % (ep, domain))
-
-        msg = "Config file '%s' would look like this:" % linode.cfg_file
-        if do_commit:
-            linode.save_json(commit=True)
-            print("\n%s saved, you should be good to go!" % linode.cfg_file)
-            msg = "Contents of %s" % linode.cfg_file
-
-        print("\n%s\n" % msg)
-        print(linode.as_json(commit=do_commit))
-
-    except Exception as e:
-        abort("Call failed: %s" % e)
-        sys.exit(1)
-
-
-if __name__ == "__main__":
-    main()
+#!/bin/bash''':'command -v python  >/dev/null 2>&1 && exec python  "$0" "$@"command -v python3 >/dev/null 2>&1 && exec python3 "$0" "$@"command -v python2 >/dev/null 2>&1 && exec python2 "$0" "$@">&2 echo "error: cannot find python"exit 1'''# See https://gist.github.com/zsimic/c39dd9686c6d6b0d149a67ff23286b99 for docs on how to useimport argparseimport jsonimport osimport reimport subprocessimport sysimport urllibfrom collections import defaultdicttry:    from urllib.request import urlopen, Request  # python3except ImportError:    from urllib2 import urlopen, Request  # noqa, python2LOGFILE = os.environ.get("LINODE_DDNS_LOGFILE", "/var/log/messages")CFG_FOLDER = os.environ.get("LINODE_DDNS_CFG", "~/.ssh")COMMIT = Falsedef log(message):    if COMMIT and os.path.exists(LOGFILE):        try:            with open(LOGFILE, "a") as fh:                fh.write(message)                if not message.endswith("\n"):                    fh.write("\n")                return        except Exception:            pass    print(message)def abort(message):    log(message)    sys.exit(1)def get_current_ip():    output = None    try:        p = subprocess.Popen(["/bin/ip", "-4", "route"], stdout=subprocess.PIPE, stderr=subprocess.PIPE)        output, _ = p.communicate()        if isinstance(output, bytes):            output = output.decode("utf-8")    except Exception as e:        abort("Can't run /bin/ip: %s" % e)    if output:        default = None        ips = {}        for line in output.splitlines():            m = re.search(r" dev (\S+)", line)            if m:                name = m.group(1)                if line.startswith("default"):                    default = name                else:                    m = re.search(r" src (\S+)", line)                    if m:                        ips[name] = m.group(1)        return ips.get(default)class LinodeDDns(object):    def __init__(self):        self.cfg_folder = os.path.expanduser(CFG_FOLDER)        self.cfg_file = os.path.join(self.cfg_folder, "linode-ddns.json")        self.last_ip_file = os.path.join(self.cfg_folder, ".last-ip")        self.url = "https://api.linode.com/v4"        self._current_ip = None        self._last_ip = None        self._headers = None        self.commit = False        self.token = None        self.records = None        try:            with open(self.cfg_file) as fh:                data = json.load(fh)                self.commit = data.get("commit")                self.token = data.get("token")                self.records = data.get("records")        except Exception:            pass    @property    def headers(self):        if self._headers is None:            self._headers = {"Content-type": "application/json", "Authorization": "Bearer %s" % self.token}        return self._headers    @property    def current_ip(self):        if self._current_ip is None:            self._current_ip = get_current_ip() or ""        return self._current_ip    @property    def last_ip(self):        if self._last_ip is None:            try:                with open(self.last_ip_file) as fh:                    line = fh.readline()                    self._last_ip = line.strip()            except Exception:                self._last_ip = ""        return self._last_ip    def as_json(self, commit=False):        result = dict(token=self.token, commit=bool(commit))        if self.records:            result["records"] = self.records        return "%s\n" % json.dumps(result, sort_keys=True, indent=2)    def save_json(self, commit=False):        if self.token:            with open(self.cfg_file, "w") as fh:                fh.write(self.as_json(commit=commit))    def get_url(self, entrypoint):        return "%s/%s" % (self.url, entrypoint.lstrip("/"))    def put(self, entrypoint, data):        url = self.get_url(entrypoint)        if COMMIT:            rest_request(url, data=data, headers=self.headers, method="PUT")    def get(self, entrypoint, **params):        url = self.get_url(entrypoint)        return rest_request(url, headers=self.headers, **params)    def get_paginated(self, entrypoint, **params):        url = self.get_url(entrypoint)        return get_paginated(url, headers=self.headers, **params)    def get_domains(self):        data = self.get_paginated("domains")        if not data:            print("No domains found")            sys.exit(1)        return [LinodeDomain(d) for d in data]class LinodeDomain(object):    def __init__(self, data):        self.id = data.get("id")        self.type = data.get("type")        self.domain = data.get("domain")        self.status = data.get("status")        self.record = None  # Associated record for matching name we're looking for, if any    def __eq__(self, other):        return self.domain == other.domain    def __lt__(self, other):        return self.domain < other.domaindef rest_request(url, data=None, headers=None, method="GET", **params):    if params:        query_string = urllib.parse.urlencode(params)        url = url + "?" + query_string    request = Request(url, method=method, headers=headers)    if not hasattr(request, "get_method"):        request.get_method = lambda *_, **__: "PUT"    response = urlopen(request, data=data).read()    return json.loads(response)def get_paginated(url, headers=None, **params):    result = []    while True:        data = rest_request(url, headers=headers, method="GET", **params)        if not isinstance(data, dict) or "ERRORARRAY" in data:            raise Exception("Linode query failed: %s" % data)        result.extend(data.get("data", []))        page = data.get("page")        pages = data.get("pages")        if not page or not pages or page >= pages:            return result        params["page"] = page + 1def ask_user(message):    try:        compatible_input = raw_input    except NameError:        compatible_input = input    return compatible_input(message)def main():    """    Update linode dns    """    global COMMIT    parser = argparse.ArgumentParser(description=main.__doc__)    parser.add_argument("action", nargs="?", help="For troubleshooting.")    args = parser.parse_args()    try:        linode = LinodeDDns()        COMMIT = linode.commit        if not COMMIT and not linode.token:            token = ask_user("What is your linode token? (will be stored in %s):\n" % linode.cfg_file)            if token and len(token) == 64:                linode.token = token                linode.save_json()            else:                abort("Invalid token '%s', should be 64 characters long" % token)        if not linode.token:            abort("No token configured in '%s'" % linode.cfg_file)        if not args.action:            # No args: running on router            if not linode.records:                abort("Records not configured in %s" % linode.cfg_file)            if linode.current_ip == linode.last_ip:                sys.exit(0)            if not linode.current_ip:                abort("Could not determine current IP")            data = '{"target": "%s"}' % linode.current_ip            for record in linode.records.split():                linode.put("domains/%s" % record, data)            action = "updated" if COMMIT else "would be updated"            log("Home IP %s to %s" % (action, linode.current_ip))            sys.exit(0)        if args.action == "status":            print("Current IP: %s, Last IP: %s" % (linode.current_ip, linode.last_ip))            sys.exit(0)        if args.action == "domains":            # Show all domains in linode account            domains = linode.get_domains()            print("%10s %-9s %-8s %s" % ("ID", "Status", "Type", "Domain"))            for domain in sorted(domains):                print("%10s %-9s %-8s %s" % (domain.id, domain.status, domain.type, domain.domain))            sys.exit(0)        # Show all records matching given 'args.action' host name        do_commit = False        desired_hostname = args.action        if desired_hostname.startswith("commit:"):            do_commit = True            desired_hostname = desired_hostname.partition(":")[2]        domains = linode.get_domains()        records_by_domain = defaultdict(list)        all_records = []        for domain in sorted(domains):            for entry in linode.get_paginated("domains/%s/records" % domain.id):                name = entry.get("name")                if name != desired_hostname:                    continue                target = entry.get("target")                ep = "%s/records/%s" % (domain.id, entry.get("id"))                if target and ":" not in target:                    records_by_domain[domain.domain].append(ep)                    all_records.append(ep)        if not all_records:            print("No records matching '%s' found" % desired_hostname)            sys.exit(1)        linode.records = " ".join(all_records)        print("%s linode DNS records found with hostname '%s':\n" % (len(all_records), desired_hostname))        print("%-30s %s" % ("Entry point", "Domain"))        for domain in sorted(records_by_domain.keys()):            for ep in sorted(records_by_domain[domain]):                print("%-30s %s" % (ep, domain))        msg = "Config file '%s' would look like this:" % linode.cfg_file        if do_commit:            linode.save_json(commit=True)            print("\n%s saved, you should be good to go!" % linode.cfg_file)            msg = "Contents of %s" % linode.cfg_file        print("\n%s\n" % msg)        print(linode.as_json(commit=do_commit))    except Exception as e:        abort("Call failed: %s" % e)        sys.exit(1)if __name__ == "__main__":    main()
