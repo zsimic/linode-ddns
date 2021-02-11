@@ -274,7 +274,8 @@ def main(args=None):
     args = parser.parse_args(args=args)
     cfg_path = os.path.abspath(os.path.expanduser(args.cfg))
     if args.interactive and not os.path.isdir(cfg_path):
-        os.mkdir(cfg_path, mode=0o700)
+        os.mkdir(cfg_path)
+        os.chmod(cfg_path, 0o700)
 
     linode = LinodeDDns(cfg_path)
 
