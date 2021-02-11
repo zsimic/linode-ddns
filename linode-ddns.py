@@ -206,9 +206,20 @@ class LinodeDDns(object):
             query_string = urlencode(params)
             url = url + "?" + query_string
 
-        LOG.debug("%s %s", method, url)
-        request = Request(url, headers=headers)
-        if not hasattr(request, "get_method"):
+        if data is None:
+            LOG.debug("%s %s", method, url)
+
+        else:
+            LOG.debug("%s %s [data=%s]", method, url, data)
+            data = json.dumps(data)
+            if sys.version_info[0] > 2:
+                data = data.encode("UTF-8")
+
+        request = Request(url, data=data, headers=headers)
+        if hasattr(request, "get_method"):
+            request.method = method
+
+        else:
             request.get_method = lambda *_, **__: method
 
         response = urlopen(request, data=data).read()
@@ -311,13 +322,13 @@ def main(args=None):
             if not linode.records:
                 linode.abort("Records not configured in %s" % linode.cfg_path, log=True)
 
+            LOG.debug("Last IP: %s, current IP: %s", linode.last_ip, linode.current_ip)
             if not linode.current_ip or linode.current_ip == linode.last_ip:
                 # When IP didn't change or couldn't determine IP (for example: internet is down), do nothing
                 sys.exit(0)
 
-            data = '{"target": "%s"}' % linode.current_ip
             for record in linode.records.split():
-                linode.put("domains/%s" % record, data)
+                linode.put("domains/%s" % record, data={"target": linode.current_ip})
 
             linode.save_ip()
             action = "updated" if linode.commit else "would be updated"
