@@ -16,14 +16,14 @@ import os
 import re
 import subprocess
 import sys
-import urllib.parse
-from collections import defaultdict
 
 try:
-    from urllib.request import urlopen, Request  # python3
+    from urllib.parse import urlencode  # python3
+    from urllib.request import urlopen, Request
 
 except ImportError:
-    from urllib2 import urlopen, Request  # noqa, python2
+    from urllib import urlencode  # noqa, python2
+    from urllib2 import urlopen, Request  # noqa
 
 
 def get_dt(fmt):
@@ -36,7 +36,7 @@ def get_json(path):
         with open(path) as fh:
             return json.load(fh)
 
-    except Exception:
+    except Exception:  # noqa
         return {}
 
 
@@ -101,7 +101,7 @@ class LinodeDDns(object):
                     line = fh.readline()
                     self._last_ip = line.strip()
 
-            except Exception:
+            except Exception:  # noqa
                 self._last_ip = ""
 
         return self._last_ip
@@ -131,7 +131,7 @@ class LinodeDDns(object):
 
             return output and output.strip()
 
-        except Exception:
+        except Exception:  # noqa
             return ""
 
     def save_ip(self):
@@ -156,7 +156,7 @@ class LinodeDDns(object):
 
                     return
 
-            except Exception:
+            except Exception:  # noqa
                 pass
 
         print(message)
@@ -194,7 +194,7 @@ class LinodeDDns(object):
             return m
 
         if params:
-            query_string = urllib.parse.urlencode(params)
+            query_string = urlencode(params)
             url = url + "?" + query_string
 
         request = Request(url, headers=headers)
@@ -252,7 +252,7 @@ def ask_user(message, default=None):
         return from_env
 
     try:
-        compatible_input = raw_input
+        compatible_input = raw_input  # noqa
 
     except NameError:
         compatible_input = input
@@ -326,6 +326,8 @@ def main(args=None):
             args.interactive = ask_user("Which hostname would you like to update?", default="home")
 
         # Show all records matching given 'args.interactive' host name
+        from collections import defaultdict
+
         desired_hostname, _, desired_domain = args.interactive.partition(".")
         domains = linode.get_domains()
         records_by_domain = defaultdict(list)
