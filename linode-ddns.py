@@ -247,8 +247,8 @@ class LinodeDomain(object):
         return self.domain < other.domain
 
 
-def ask_user(message):
-    from_env = os.environ.get("LINODE_DDNS_TOKEN")
+def ask_user(message, default=None):
+    from_env = os.environ.get("TEST_ANSWER")
     if from_env:
         return from_env
 
@@ -258,7 +258,10 @@ def ask_user(message):
     except NameError:
         compatible_input = input
 
-    return compatible_input(message)
+    if default:
+        message = "%s [default: %s]" % (message, default)
+
+    return compatible_input("%s:\n" % message) or default
 
 
 def main(args=None):
@@ -278,7 +281,7 @@ def main(args=None):
 
     try:
         if args.interactive and not linode.token:
-            token = ask_user("What is your linode token? (will be stored in %s):\n" % linode.cfg_path)
+            token = ask_user("What is your linode token? (will be stored in %s)" % linode.cfg_path)
             if token and len(token) == 64:
                 linode.token = token
                 linode.save_json()
@@ -320,6 +323,9 @@ def main(args=None):
 
             sys.exit(0)
 
+        if args.interactive == "_ask_":
+            args.interactive = ask_user("Which hostname would you like to update?", default="home")
+
         # Show all records matching given 'args.interactive' host name
         desired_hostname, _, desired_domain = args.interactive.partition(".")
         domains = linode.get_domains()
@@ -339,7 +345,7 @@ def main(args=None):
                         all_records.append(ep)
 
         if not all_records:
-            sys.exit("No records matching '%s' found" % args.interactive)
+            sys.exit("No linode DNS records matching hostname '%s' found" % args.interactive)
 
         linode.records = " ".join(all_records)
         print("%s linode DNS records found with hostname '%s':\n" % (len(all_records), desired_hostname))
@@ -358,6 +364,10 @@ def main(args=None):
 
         print("\n%s\n" % msg)
         print(linode.as_json())
+
+    except KeyboardInterrupt:
+        print("\nAborted!\n")
+        sys.exit(1)
 
     except Exception as e:
         linode.abort("FAILED: %s" % e)

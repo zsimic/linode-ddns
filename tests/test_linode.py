@@ -100,11 +100,11 @@ def test_setup(tmpdir):
     st = ScriptTester(tmpdir)
 
     # Verify that with an empty config, user gets asked
-    st.gen_cfg("user-filled-bad", env={"LINODE_DDNS_TOKEN": "foo"})
+    st.gen_cfg("user-filled-bad", env={"TEST_ANSWER": "foo"})
     output = st.expect_failure("-i", "status")
     assert "should be 64 characters long" in output
 
-    st.gen_cfg("user-filled-ok", env={"LINODE_DDNS_TOKEN": TEST_TOKEN})
+    st.gen_cfg("user-filled-ok", env={"TEST_ANSWER": TEST_TOKEN})
     output = st.expect_success("-i", "status")
     assert st.current_config == {"token": TEST_TOKEN}
     assert "Current IP:" in output
@@ -128,7 +128,7 @@ def test_setup(tmpdir):
     assert "2/records/3" not in output
 
     output = st.expect_failure("-i", "home.example.com")
-    assert "No records matching" in output
+    assert "No linode DNS records matching" in output
 
     output = st.expect_success("-i", "home")
     assert "1/records/3" in output

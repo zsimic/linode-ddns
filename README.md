@@ -4,33 +4,24 @@ Small script allowing to sync one's home IP records to Linode DNS.
 
 Made initially to run periodically on an [Ubiquiti Edge Router Lite](https://www.ui.com/edgemax/edgerouter-lite/).
 
-# Installation
-
-## TLDR: quick install
+# TL;DR: quick install
 
 If you're already familiar with this script, or don't care about the details
-here's some quick commands you can copy-paste (replace `home.mydomain.com` accordingly):
+you can run this to expedite the setup:
 
 ```
-LHOST=home.mydomain.com curl -s https://raw.githubusercontent.com/zsimic/linode-ddns/main/install.sh | sudo bash
+curl -s https://raw.githubusercontent.com/zsimic/linode-ddns/main/install.sh | bash
 ```
 
-Then:
+# How to use
 
-```
-configure
-set system task-scheduler task linode-ddns interval 30m
-set system task-scheduler task linode-ddns executable path /config/scripts/linode-ddns
-commit
-save
-```
+Here's a more detailed walk-through, if you're interested to see how the script works.
 
 ### 1. Grab the script on the router
 
 ssh to your router, then:
 
 ```
-# Grab the script
 sudo curl -s -o/config/scripts/linode-ddns https://raw.githubusercontent.com/zsimic/linode-ddns/main/linode-ddns.py
 sudo chmod 0755 /config/scripts/linode-ddns
 ```
@@ -57,7 +48,7 @@ First, we'll run the script with argument `domains` in order to:
 Let's run:
 
 ```
-sudo /config/scripts/linode-ddns domains
+sudo /config/scripts/linode-ddns -i domains
 ```
 
 This will ask you to paste in your token, and will show you your linode domains.
@@ -70,25 +61,27 @@ with hostname `home` (put some IP address manually there just to get the record 
 Next, we check that the script can find that record by running:
 
 ```
-sudo /config/scripts/linode-ddns home
+sudo /config/scripts/linode-ddns -i home.example.com
 ```
 
-This should show your record(s)
-(note: the script can update several records at the same time, if you have say
-`home.domain1.com` and `home.domain2.com`, this script can update them all...).
+This should show your record.
 
-If you'd prefer updating the DNS entry to just one domain,
-simply state the domain you want like so:
+Note that the script can update several records at the same time, if you have say
+`home.domain1.com` and `home.domain2.com`, this script can update them all...
+
+If you would like to update several domains at once, omit the domain part as in: 
 
 ```
-sudo /config/scripts/linode-ddns home.domain1.com
+sudo /config/scripts/linode-ddns -i home
 ```
+
+Doing so will configure fetch a config that will update all hostnames `home` on all your domains.
 
 Once you see what you expect, either take the output and save it to `/root/.ssh/linode-ddns.json`,
 or run this to have the script do that for you:
 
 ```
-sudo /config/scripts/linode-ddns commit:home
+sudo /config/scripts/linode-ddns -i home.example.com --commit
 ```
 
 ### 3. Test that the script works when invoked without arguments
@@ -99,16 +92,16 @@ We can try it out:
 ```
 sudo /config/scripts/linode-ddns
 
-sudo cat /root/.ssh/.last-ip  # Should show your IP!
+sudo cat /root/.ssh/.linode-ddns-ip  # Should show your IP!
 
 # Should show one log message stating that IP was updated
-sudo tail /var/log/messages
+tail /var/log/messages
 
 # If we run it again, nothing should happen
 sudo /config/scripts/linode-ddns
 
 # Only one "IP updated" message still
-sudo tail /var/log/messages
+tail /var/log/messages
 ```
 
 ### 4. Schedule a job to run this script periodically
@@ -123,8 +116,6 @@ commit
 save
 ```
 
-And you're done!
-
 
 ### 5. Double-check that it works unattended
 
@@ -132,12 +123,12 @@ To double-check that the task is getting triggered, you can do this:
 
 ```bash
 # Force script to re-run by deleting the file where it remembers which IP it last saw
-sudo rm /root/.ssh/.last-ip
+sudo rm /root/.ssh/.linode-ddns-ip
 
 # Wait 30 minutes (or whatever time you scheduled)
 
 # You should see evidence that the script ran:
-sudo cat /root/.ssh/.last-ip
+sudo cat /root/.ssh/.linode-ddns-ip
 
 # The logs should have a line saying: "... linode-ddns: Home IP updated to ..."
 tail -f /var/log/messages
