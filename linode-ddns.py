@@ -7,7 +7,7 @@ command -v python2 >/dev/null 2>&1 && exec python2 "$0" "$@"
 exit 1
 '''
 
-# See https://gist.github.com/zsimic/c39dd9686c6d6b0d149a67ff23286b99 for docs on how to use
+# See https://github.com/zsimic/linode-ddns for docs on how to use
 
 import argparse
 import datetime
