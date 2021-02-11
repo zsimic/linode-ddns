@@ -12,7 +12,7 @@ sudo chmod 0755 $TARGET
 sudo $TARGET -i _ask_ --commit
 
 echo
-echo << EOT
+cat << EOT
 Now run this:
 
 configure
