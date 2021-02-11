@@ -1,5 +1,7 @@
 #!/bin/bash
 
+# Obtained via curl -O https://raw.githubusercontent.com/zsimic/linode-ddns/main/install-linode-ddns.sh
+
 [ -z "$TARGET" ] && TARGET=/config/scripts/linode-ddns
 FOLDER=$(dirname $TARGET)
 [ ! -d $FOLDER ] && echo "Folder $FOLDER does not exist" && exit 1

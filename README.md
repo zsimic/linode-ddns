@@ -9,7 +9,7 @@ Made initially to run periodically on an [Ubiquiti Edge Router Lite](https://www
 # TL;DR: quick install
 
 If you're already familiar with this script, or don't care about the details
-you can run this to expedite the setup:
+you can run this to expedite the setup (it'll prompt you for your token and hostname):
 
 ```
 curl -O https://raw.githubusercontent.com/zsimic/linode-ddns/main/install-linode-ddns.sh
