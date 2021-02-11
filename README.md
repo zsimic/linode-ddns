@@ -6,18 +6,33 @@ Made initially to run periodically on an [Ubiquiti Edge Router Lite](https://www
 
 # Installation
 
+## TLDR: quick install
+
+If you're already familiar with this script, or don't care about the details
+here's some quick commands you can copy-paste (replace `home.mydomain.com` accordingly):
+
+```
+LHOST=home.mydomain.com curl -s https://raw.githubusercontent.com/zsimic/linode-ddns/main/install.sh | sudo bash
+```
+
+Then:
+
+```
+configure
+set system task-scheduler task linode-ddns interval 30m
+set system task-scheduler task linode-ddns executable path /config/scripts/linode-ddns
+commit
+save
+```
+
 ### 1. Grab the script on the router
 
 ssh to your router, then:
 
 ```
 # Grab the script
-sudo curl -s -o/config/scripts/linode-ddns https://raw.githubusercontent.com/zsimic/linode-ddns/main/linode-ddns
+sudo curl -s -o/config/scripts/linode-ddns https://raw.githubusercontent.com/zsimic/linode-ddns/main/linode-ddns.py
 sudo chmod 0755 /config/scripts/linode-ddns
-
-# Ensure /root/.ssh exists and is locked down:
-sudo mkdir -p /root/.ssh
-sudo chown 0700 /root/.ssh
 ```
 
 ### 2. Configure linode `token` and REST end-point `records`
@@ -26,7 +41,6 @@ The config `/root/.ssh/linode-ddns.json` will eventually look like this:
 
 ```json
 {
-  "commit": true,
   "records": "1234/records/4321",
   "token": "...linode token..."
 }
@@ -62,6 +76,13 @@ sudo /config/scripts/linode-ddns home
 This should show your record(s)
 (note: the script can update several records at the same time, if you have say
 `home.domain1.com` and `home.domain2.com`, this script can update them all...).
+
+If you'd prefer updating the DNS entry to just one domain,
+simply state the domain you want like so:
+
+```
+sudo /config/scripts/linode-ddns home.domain1.com
+```
 
 Once you see what you expect, either take the output and save it to `/root/.ssh/linode-ddns.json`,
 or run this to have the script do that for you:
