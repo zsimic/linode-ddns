@@ -1,3 +1,5 @@
+[![Tested with Github Actions](https://github.com/zsimic/linode-ddns/workflows/Tests/badge.svg)](https://github.com/zsimic/linode-ddns/actions)
+
 # linode-ddns
 
 Small script allowing to sync one's home IP records to Linode DNS.

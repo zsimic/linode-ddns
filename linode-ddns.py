@@ -69,19 +69,18 @@ class LinodeDDns(object):
             default = None
             ips = {}
             output = self.program_output("/bin/ip", "-4", "route")
-            if output:
-                for line in output.splitlines():
-                    if "linkdown" not in line:
-                        m = re.search(r" dev (\S+)", line)
-                        if m:
-                            name = m.group(1)
-                            if line.startswith("default"):
-                                default = name
+            for line in output.splitlines():
+                if "linkdown" not in line:
+                    m = re.search(r" dev (\S+)", line)
+                    if m:
+                        name = m.group(1)
+                        if line.startswith("default"):
+                            default = name
 
-                            else:
-                                m = re.search(r" src (\S+)", line)
-                                if m:
-                                    ips[name] = m.group(1)
+                        else:
+                            m = re.search(r" src (\S+)", line)
+                            if m:
+                                ips[name] = m.group(1)
 
             self._current_ip = ips.get(default) or ""
 
@@ -119,7 +118,7 @@ class LinodeDDns(object):
 
         return self._hostname
 
-    def program_output(self, program, *args, default=""):
+    def program_output(self, program, *args):
         m = self._mock.get(program)
         if m:
             return m
@@ -133,7 +132,7 @@ class LinodeDDns(object):
             return output and output.strip()
 
         except Exception:
-            return default
+            return ""
 
     def save_ip(self):
         if self.current_ip and (self.commit or os.environ.get("PYTEST_CURRENT_TEST")):
