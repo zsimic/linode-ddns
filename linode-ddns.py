@@ -28,6 +28,7 @@ except ImportError:
 
 
 LOG = logging.getLogger(__name__)
+PY2 = sys.version_info[0] < 3
 
 
 def get_dt(fmt):
@@ -212,15 +213,15 @@ class LinodeDDns(object):
         else:
             LOG.debug("%s %s [data=%s]", method, url, data)
             data = json.dumps(data)
-            if sys.version_info[0] > 2:
+            if not PY2:
                 data = data.encode("UTF-8")
 
         request = Request(url, data=data, headers=headers)
-        if hasattr(request, "get_method"):
-            request.method = method
+        if PY2:
+            request.get_method = lambda *_, **__: method
 
         else:
-            request.get_method = lambda *_, **__: method
+            request.method = method
 
         response = urlopen(request, data=data).read()
         return json.loads(response)
