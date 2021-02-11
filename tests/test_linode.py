@@ -149,9 +149,9 @@ def test_setup(tmpdir):
     # Simulate headless run
     st.gen_cfg("valid", token=TEST_TOKEN, records="1/records/3", logfile=logfile, _mock=SAMPLE_MOCK)
     output = st.expect_success()
-    assert not output
+    assert "Would PUT" in output
     logged = pop_file(logfile)
-    assert "Would PUT" in logged
+    assert not os.path.exists(logfile)
     assert "Home IP would be updated to 1.2.3.5" in logged
     ipfile_path = os.path.join(st.cfg_folder, ".linode-ddns-ip")
     last_ip = pop_file(ipfile_path, delete=False)

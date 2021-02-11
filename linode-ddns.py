@@ -140,8 +140,13 @@ class LinodeDDns(object):
                 fh.write("%s\n" % self.current_ip)
                 fh.write("# Updated on %s for %s\n" % (get_dt("%Y-%m-%d %H:%M:%S"), self.records))
 
-    def abort(self, message):
-        self.log(message)
+    def abort(self, message, log=False):
+        if log:
+            self.log(message)
+
+        else:
+            print(message)
+
         sys.exit(1)
 
     def log(self, message):
@@ -182,7 +187,7 @@ class LinodeDDns(object):
             self.rest_request(url, data=data, headers=self.headers, method="PUT")
 
         else:
-            self.log("Would PUT %s %s" % (entrypoint, data))
+            print("Would PUT %s %s" % (entrypoint, data))
 
     def get(self, entrypoint, **params):
         url = self.get_url(entrypoint)
@@ -290,12 +295,12 @@ def main(args=None):
                 linode.abort("Invalid token '%s', should be 64 characters long" % token)
 
         if not linode.token:
-            linode.abort("No token configured in '%s'" % linode.cfg_path)
+            linode.abort("No token configured in '%s'" % linode.cfg_path, log=not args.interactive)
 
         if not args.interactive:
             # No args: running scheduled on router
             if not linode.records:
-                linode.abort("Records not configured in %s" % linode.cfg_path)
+                linode.abort("Records not configured in %s" % linode.cfg_path, log=True)
 
             if not linode.current_ip or linode.current_ip == linode.last_ip:
                 # When IP didn't change or couldn't determine IP (for example: internet is down), do nothing
@@ -372,7 +377,7 @@ def main(args=None):
         sys.exit(1)
 
     except Exception as e:
-        linode.abort("FAILED: %s" % e)
+        linode.abort("FAILED: %s" % e, log=not args.interactive)
 
 
 if __name__ == "__main__":

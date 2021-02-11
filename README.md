@@ -12,7 +12,11 @@ If you're already familiar with this script, or don't care about the details
 you can run this to expedite the setup:
 
 ```
-curl -s https://raw.githubusercontent.com/zsimic/linode-ddns/main/install.sh | bash
+curl -O https://raw.githubusercontent.com/zsimic/linode-ddns/main/install-linode-ddns.sh
+
+bash install-linode-ddns.sh
+
+rm install-linode-ddns.sh
 ```
 
 # How to use
