@@ -143,7 +143,7 @@ def test_setup(tmpdir):
 
     st.gen_cfg("invalid", token=TEST_TOKEN, logfile=logfile, _mock=SAMPLE_MOCK)
     output = st.expect_failure()
-    assert not output
+    assert "Records not configured" in output
     assert "Records not configured" in pop_file(logfile)
 
     # Simulate headless run

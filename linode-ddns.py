@@ -12,6 +12,7 @@ exit 1
 import argparse
 import datetime
 import json
+import logging
 import os
 import re
 import subprocess
@@ -24,6 +25,9 @@ try:
 except ImportError:
     from urllib import urlencode  # noqa, python2
     from urllib2 import urlopen, Request  # noqa
+
+
+LOG = logging.getLogger(__name__)
 
 
 def get_dt(fmt):
@@ -136,16 +140,15 @@ class LinodeDDns(object):
 
     def save_ip(self):
         if self.current_ip and (self.commit or os.environ.get("PYTEST_CURRENT_TEST")):
+            LOG.debug("Saving last-ip: %s to %s", self.current_ip, self.last_ip_path)
             with open(self.last_ip_path, "w") as fh:
                 fh.write("%s\n" % self.current_ip)
                 fh.write("# Updated on %s for %s\n" % (get_dt("%Y-%m-%d %H:%M:%S"), self.records))
 
     def abort(self, message, log=False):
+        print(message)
         if log:
             self.log(message)
-
-        else:
-            print(message)
 
         sys.exit(1)
 
@@ -175,6 +178,7 @@ class LinodeDDns(object):
 
     def save_json(self):
         if self.token:
+            print("Saving %s", self.cfg_path)
             with open(self.cfg_path, "w") as fh:
                 fh.write(self.as_json())
 
@@ -202,6 +206,7 @@ class LinodeDDns(object):
             query_string = urlencode(params)
             url = url + "?" + query_string
 
+        LOG.debug("%s %s", method, url)
         request = Request(url, headers=headers)
         if not hasattr(request, "get_method"):
             request.get_method = lambda *_, **__: method
@@ -275,12 +280,16 @@ def main(args=None):
     parser = argparse.ArgumentParser(description=main.__doc__)
     parser.add_argument("--cfg", "-c", default="~/.ssh", help="Folder to use for config (used for testing).")
     parser.add_argument("--commit", action="store_true", help="Commit config (in interactive mode).")
+    parser.add_argument("--debug", action="store_true", help="Show debug info.")
     parser.add_argument("--interactive", "-i", help="Use for interactive initial setup, or querying/testing.")
     args = parser.parse_args(args=args)
     cfg_path = os.path.abspath(os.path.expanduser(args.cfg))
     if args.interactive and not os.path.isdir(cfg_path):
         os.mkdir(cfg_path)
         os.chmod(cfg_path, 0o700)
+
+    level = logging.DEBUG if args.debug else logging.INFO
+    logging.basicConfig(format="%(asctime)s %(levelname)s %(message)s", level=level)
 
     linode = LinodeDDns(cfg_path)
 
