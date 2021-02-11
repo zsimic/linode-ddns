@@ -97,6 +97,7 @@ def pop_file(path, delete=True):
 
 
 def test_setup(tmpdir):
+    tmpdir = str(tmpdir)
     st = ScriptTester(tmpdir)
 
     # Verify that with an empty config, user gets asked
