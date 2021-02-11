@@ -22,7 +22,7 @@ jobs:
         python-version: ${{ matrix.python-version }}
 
     - run: pip install -U pip tox
-    - run: tox -e py,style
+    - run: tox -e py
 
   linters:
 
