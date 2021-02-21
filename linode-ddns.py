@@ -179,7 +179,7 @@ class LinodeDDns(object):
 
     def save_json(self):
         if self.token:
-            print("Saving %s", self.cfg_path)
+            print("Saving %s" % self.cfg_path)
             with open(self.cfg_path, "w") as fh:
                 fh.write(self.as_json())
 
