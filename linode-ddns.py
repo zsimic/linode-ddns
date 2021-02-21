@@ -55,7 +55,7 @@ class LinodeDDns(object):
         self.url = "https://api.linode.com/v4"
         self.folder = cfg_folder
         self.cfg_path = os.path.join(self.folder, "linode-ddns.json")
-        self.last_ip_path = os.path.join(self.folder, ".linode-ddns-ip")
+        self.last_ip_path = os.path.join(self.folder, "linode-ddns-ip.txt")
         self.cfg = get_json(self.cfg_path)
         self._mock = self.cfg.get("_mock", {})
         self.token = self.cfg.get("token")
@@ -290,7 +290,7 @@ def main(args=None):
     Update linode dns
     """
     parser = argparse.ArgumentParser(description=main.__doc__)
-    parser.add_argument("--cfg", "-c", default="~/.ssh", help="Folder to use for config (used for testing).")
+    parser.add_argument("--cfg", "-c", default="/config/scripts", help="Folder where config is stored.")
     parser.add_argument("--commit", action="store_true", help="Commit config (in interactive mode).")
     parser.add_argument("--debug", action="store_true", help="Show debug info.")
     parser.add_argument("--interactive", "-i", help="Use for interactive initial setup, or querying/testing.")

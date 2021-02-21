@@ -13,7 +13,7 @@ chmod 0755 $TARGET
 
 ACTION=$1
 if [[ "$ACTION" == "clean" ]]; then
-  rm ~/.ssh/linode-ddns.json
+  rm /config/scripts/linode-ddns.json
 elif [[ "$ACTION" == "get" ]]; then
   exit 0
 elif [[ -n "$ACTION" ]]; then

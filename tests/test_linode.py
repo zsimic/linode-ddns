@@ -153,7 +153,7 @@ def test_setup(tmpdir):
     logged = pop_file(logfile)
     assert not os.path.exists(logfile)
     assert "Home IP would be updated to 1.2.3.5" in logged
-    ipfile_path = os.path.join(st.cfg_folder, ".linode-ddns-ip")
+    ipfile_path = os.path.join(st.cfg_folder, "linode-ddns-ip.txt")
     last_ip = pop_file(ipfile_path, delete=False)
     assert "1.2.3.5" in last_ip
 

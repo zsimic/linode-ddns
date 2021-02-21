@@ -34,7 +34,7 @@ sudo chmod 0755 /config/scripts/linode-ddns
 
 ### 2. Configure linode `token` and REST end-point `records`
 
-The config `/root/.ssh/linode-ddns.json` will eventually look like this:
+The config `/config/scripts/linode-ddns.json` will eventually look like this:
 
 ```json
 {
@@ -48,7 +48,7 @@ before we create a scheduled job to run it periodically.
 
 First, we'll run the script with argument `domains` in order to:
 
-- have the script ask you for your token (and store it in `/root/.ssh/linode-ddns.json`)
+- have the script ask you for your token (and store it in `/config/scripts/linode-ddns.json`)
 - double-check that things work (linode REST API query to list your domains)
 
 Let's run:
@@ -83,7 +83,7 @@ sudo /config/scripts/linode-ddns -i home
 
 Doing so will configure fetch a config that will update all hostnames `home` on all your domains.
 
-Once you see what you expect, either take the output and save it to `/root/.ssh/linode-ddns.json`,
+Once you see what you expect, either take the output and save it to `/config/scripts/linode-ddns.json`,
 or run this to have the script do that for you:
 
 ```
@@ -98,7 +98,7 @@ We can try it out:
 ```
 sudo /config/scripts/linode-ddns
 
-sudo cat /root/.ssh/.linode-ddns-ip  # Should show your IP!
+sudo cat /config/scripts/linode-ddns-ip.txt  # Should show your IP!
 
 # Should show one log message stating that IP was updated
 tail /var/log/messages
@@ -129,12 +129,12 @@ To double-check that the task is getting triggered, you can do this:
 
 ```bash
 # Force script to re-run by deleting the file where it remembers which IP it last saw
-sudo rm /root/.ssh/.linode-ddns-ip
+sudo rm /config/scripts/linode-ddns-ip.txt
 
 # Wait 30 minutes (or whatever time you scheduled)
 
 # You should see evidence that the script ran:
-sudo cat /root/.ssh/.linode-ddns-ip
+sudo cat /config/scripts/linode-ddns-ip.txt
 
 # The logs should have a line saying: "... linode-ddns: Home IP updated to ..."
 tail -f /var/log/messages
