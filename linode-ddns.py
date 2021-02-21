@@ -183,6 +183,8 @@ class LinodeDDns(object):
             with open(self.cfg_path, "w") as fh:
                 fh.write(self.as_json())
 
+            os.chmod(self.cfg_path, 0o600)
+
     def get_url(self, entrypoint):
         return "%s/%s" % (self.url, entrypoint.lstrip("/"))
 
